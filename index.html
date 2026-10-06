@@ -95,7 +95,8 @@ const STR = {
     passwordError: "Couldn't change password. Check your current password.",
     dateDisplay: "Date Bar Display",
     showWeekday: "Weekday", showWeek: "Week Number", showGregorian: "Gregorian Date",
-    showBangla: "Bangla Date", showHijri: "Hijri Date",
+    showBangla: "Bangla Date", showHijri: "Hijri Date", showTime: "Time", timeFormatLabel: "Time Format",
+    format12h: "12 Hour", format24h: "24 Hour",
     userManagement: "User Management", addUser: "Add User", editUser: "Edit User",
     name: "Name", isAdminUser: "Make this user an Admin", active: "Active", inactive: "Inactive",
     permissions: "Permissions (per Sub Unit)", noAccess: "No Access", viewOnly: "View",
@@ -127,6 +128,10 @@ const STR = {
     fillAllFields: "Please fill in all required fields.",
     passwordConfirmTitle: "Confirm Password", passwordConfirmHint: "Enter your password to confirm this action.",
     confirm: "Confirm", wrongPassword: "Incorrect password.",
+    viewPassword: "View Password", hidePassword: "Hide Password", userPasswordLabel: "User's Password",
+    noStoredPassword: "No stored password — set a new one below.",
+    userCurrentPasswordOneTime: "This user's current password (one-time, needed to apply the change)",
+    passwordUpdated: "Password updated.", changePasswordForUser: "Change Password",
     expenseCategories: "Expense Categories", eventTypesMgmt: "Event Types", eventPlacesMgmt: "Event Places",
     approve: "Approve", reject: "Reject", requestedBy: "Requested by",
     noRequests: "No pending requests.", approvalPendingBadge: "Approval Pending",
@@ -176,7 +181,8 @@ const STR = {
     passwordError: "পাসওয়ার্ড পরিবর্তন করা যায়নি। বর্তমান পাসওয়ার্ড চেক করো।",
     dateDisplay: "ডেট বার ডিসপ্লে",
     showWeekday: "সপ্তাহের দিন", showWeek: "সপ্তাহ নম্বর", showGregorian: "ইংরেজি তারিখ",
-    showBangla: "বাংলা তারিখ", showHijri: "হিজরি তারিখ",
+    showBangla: "বাংলা তারিখ", showHijri: "হিজরি তারিখ", showTime: "সময়", timeFormatLabel: "সময়ের ফরম্যাট",
+    format12h: "১২ ঘণ্টা", format24h: "২৪ ঘণ্টা",
     userManagement: "ইউজার ম্যানেজমেন্ট", addUser: "ইউজার যোগ করুন", editUser: "ইউজার এডিট করুন",
     name: "নাম", isAdminUser: "এই ইউজারকে Admin বানাও", active: "সক্রিয়", inactive: "নিষ্ক্রিয়",
     permissions: "পারমিশন (প্রতি সাব ইউনিট)", noAccess: "কোনো অ্যাক্সেস নেই", viewOnly: "দেখা",
@@ -208,6 +214,10 @@ const STR = {
     fillAllFields: "সব আবশ্যক ঘর পূরণ করো।",
     passwordConfirmTitle: "পাসওয়ার্ড নিশ্চিত করো", passwordConfirmHint: "এই কাজটি নিশ্চিত করতে তোমার পাসওয়ার্ড দাও।",
     confirm: "নিশ্চিত করো", wrongPassword: "পাসওয়ার্ড ভুল।",
+    viewPassword: "পাসওয়ার্ড দেখো", hidePassword: "পাসওয়ার্ড লুকাও", userPasswordLabel: "ইউজারের পাসওয়ার্ড",
+    noStoredPassword: "কোনো পাসওয়ার্ড সংরক্ষিত নেই — নিচে নতুন একটা সেট করো।",
+    userCurrentPasswordOneTime: "এই ইউজারের বর্তমান পাসওয়ার্ড (একবারের জন্য, পরিবর্তন করতে দরকার)",
+    passwordUpdated: "পাসওয়ার্ড আপডেট হয়েছে।", changePasswordForUser: "পাসওয়ার্ড পরিবর্তন করুন",
     expenseCategories: "খরচের খাত", eventTypesMgmt: "ইভেন্ট টাইপ", eventPlacesMgmt: "ইভেন্ট প্লেস",
     approve: "অনুমোদন করো", reject: "প্রত্যাখ্যান করো", requestedBy: "অনুরোধ করেছে",
     noRequests: "কোনো পেন্ডিং অনুরোধ নেই।", approvalPendingBadge: "অনুমোদনের অপেক্ষায়",
@@ -251,8 +261,8 @@ function loadSettings() {
   try {
     const raw = localStorage.getItem(SETTINGS_KEY);
     const s = raw ? JSON.parse(raw) : {};
-    return { showWeekday: true, showWeek: true, showGregorian: true, showBangla: true, showHijri: true, ...s };
-  } catch { return { showWeekday: true, showWeek: true, showGregorian: true, showBangla: true, showHijri: true }; }
+    return { showWeekday: true, showWeek: true, showGregorian: true, showBangla: true, showHijri: true, showTime: true, timeFormat: "12h", ...s };
+  } catch { return { showWeekday: true, showWeek: true, showGregorian: true, showBangla: true, showHijri: true, showTime: true, timeFormat: "12h" }; }
 }
 function saveSettings(s) { localStorage.setItem(SETTINGS_KEY, JSON.stringify(s)); }
 let dispSettings = loadSettings();
@@ -302,12 +312,20 @@ function getHijriDate(date) {
     return { day, month: HIJRI_MONTHS[month - 1], year };
   } catch { return null; }
 }
+function formatTimeDisplay(date, format) {
+  if (format === "24h") return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
+  let h = date.getHours();
+  const ampm = h >= 12 ? "PM" : "AM";
+  h = h % 12; if (h === 0) h = 12;
+  return `${h}:${String(date.getMinutes()).padStart(2, "0")} ${ampm}`;
+}
 function dateBarHtml() {
   const now = new Date();
   const parts = [];
   if (dispSettings.showWeekday) parts.push(WEEKDAYS[now.getDay()]);
   if (dispSettings.showWeek) parts.push(`WK-${weekNumberSunday(now)}`);
   if (dispSettings.showGregorian) parts.push(`${String(now.getDate()).padStart(2,"0")}-${GREG_MONTHS[now.getMonth()]}-${now.getFullYear()}`);
+  if (dispSettings.showTime) parts.push(formatTimeDisplay(now, dispSettings.timeFormat || "12h"));
   if (dispSettings.showBangla) { const b = getBanglaDate(now); parts.push(`${b.day}-${b.month}-${b.year}`); }
   if (dispSettings.showHijri) { const h = getHijriDate(now); if (h) parts.push(`${h.day}-${h.month}-${h.year}`); }
   if (parts.length === 0) return "";
@@ -662,11 +680,18 @@ function openSettingsModal() {
       <div>
         <div class="text-sm font-medium mb-2" style="color:#6B6659">${t().dateDisplay}</div>
         <div class="flex flex-col gap-2">
-          ${["showWeekday","showWeek","showGregorian","showBangla","showHijri"].map(key => `
+          ${["showWeekday","showWeek","showGregorian","showTime","showBangla","showHijri"].map(key => `
             <label class="flex items-center justify-between text-sm rounded-lg px-3 py-2" style="background:#F7F5F0">
               <span>${t()[key]}</span>
               <input type="checkbox" data-dtoggle="${key}" ${s[key] ? "checked" : ""} />
             </label>`).join("")}
+          <label class="flex items-center justify-between text-sm rounded-lg px-3 py-2" style="background:#F7F5F0">
+            <span>${t().timeFormatLabel}</span>
+            <select id="timeFormatSelect" class="inp" style="width:auto;font-size:12px">
+              <option value="12h" ${(s.timeFormat || "12h") === "12h" ? "selected" : ""}>${t().format12h}</option>
+              <option value="24h" ${s.timeFormat === "24h" ? "selected" : ""}>${t().format24h}</option>
+            </select>
+          </label>
         </div>
       </div>
       <div>
@@ -693,6 +718,12 @@ function openSettingsModal() {
       const bar = document.getElementById("dateBar");
       if (bar) bar.innerHTML = dateBarHtml();
     }));
+    wrap.querySelector("#timeFormatSelect").addEventListener("change", (e) => {
+      dispSettings.timeFormat = e.target.value;
+      saveSettings(dispSettings);
+      const bar = document.getElementById("dateBar");
+      if (bar) bar.innerHTML = dateBarHtml();
+    });
     wrap.querySelector("#pwToggleRow").addEventListener("click", () => {
       const body = wrap.querySelector("#pwBody");
       const chevron = wrap.querySelector("#pwChevron");
@@ -707,13 +738,16 @@ function openSettingsModal() {
       const n1 = wrap.querySelector("#newPass").value;
       const n2 = wrap.querySelector("#newPass2").value;
       if (n1 !== n2) { msg.style.color = "#9B2C2C"; msg.textContent = t().passwordMismatch; return; }
+      if (n1.length < 6) { msg.style.color = "#9B2C2C"; msg.textContent = t().userCreateError; return; }
       try {
         const cred = EmailAuthProvider.credential(currentUser.email, cur);
         await reauthenticateWithCredential(currentUser, cred);
         await updatePassword(currentUser, n1);
+        await setDoc(doc(db, "userSecrets", currentUser.uid), { password: n1, updatedAt: serverTimestamp() }).catch(() => {});
         msg.style.color = "#1B4332"; msg.textContent = t().passwordChanged;
+        wrap.querySelector("#curPass").value = ""; wrap.querySelector("#newPass").value = ""; wrap.querySelector("#newPass2").value = "";
       } catch (e) {
-        msg.style.color = "#9B2C2C"; msg.textContent = t().passwordError;
+        msg.style.color = "#9B2C2C"; msg.textContent = `${t().passwordError} (${e.code || e.message})`;
       }
     });
   });
@@ -3130,6 +3164,7 @@ function openAddUserModal() {
           createdAt: serverTimestamp(),
         });
         await setDoc(doc(db, "usernameIndex", username), { email: authEmail });
+        await setDoc(doc(db, "userSecrets", newUid), { password, updatedAt: serverTimestamp() });
         wrap.remove();
       } catch (e) { errBox.textContent = t().userCreateError; }
     });
@@ -3148,6 +3183,22 @@ function openEditUserModal(user) {
         <div class="text-sm font-medium mb-2" style="color:#6B6659">${t().permissions}</div>
         <div id="uPerms">${permMatrixHtml(user.permissions)}</div>
       </div>
+      <div class="flex flex-col gap-2">
+        <div class="flex items-center justify-between text-sm rounded-lg px-3 py-2" style="background:#F7F5F0">
+          <span class="font-medium" style="color:#6B6659">${t().userPasswordLabel}</span>
+          <div class="flex items-center gap-2">
+            <span id="uPwDisplay" class="font-mono">••••••••</span>
+            <button type="button" id="uPwToggle" style="color:#8a8578">👁</button>
+          </div>
+        </div>
+        <button type="button" id="uPwChangeToggle" class="btn btn-outline" style="padding:4px 8px;font-size:12px;align-self:flex-start">${t().changePasswordForUser}</button>
+        <div id="uPwChangeBody" style="display:none" class="flex flex-col gap-2">
+          <input id="uNewPass" type="password" placeholder="${t().newPassword}" class="inp" />
+          <input id="uKnownCurPass" type="password" placeholder="${t().userCurrentPasswordOneTime}" class="inp" style="display:none" />
+          <button type="button" id="uPwSaveBtn" class="btn btn-primary" style="padding:5px 10px;font-size:12px;align-self:flex-start">${t().save}</button>
+        </div>
+        <div id="uPwMsg" class="text-xs"></div>
+      </div>
       ${user.email ? `<button id="resetBtn" class="btn btn-outline">${t().sendResetEmail}</button>` : ""}
       <div id="uMsg" class="text-xs"></div>
       <div class="flex justify-end gap-2"><button id="cancelBtn" class="btn btn-outline">${t().cancel}</button><button id="saveBtn" class="btn btn-primary">${t().save}</button></div>
@@ -3159,6 +3210,53 @@ function openEditUserModal(user) {
       const msg = wrap.querySelector("#uMsg");
       try { await sendPasswordResetEmail(auth, user.email); msg.style.color = "#1B4332"; msg.textContent = t().resetEmailSent; }
       catch (e) { msg.style.color = "#9B2C2C"; msg.textContent = t().passwordError; }
+    });
+    let pwShown = false;
+    wrap.querySelector("#uPwToggle").addEventListener("click", () => {
+      const disp = wrap.querySelector("#uPwDisplay");
+      const pwMsg = wrap.querySelector("#uPwMsg");
+      if (pwShown) { disp.textContent = "••••••••"; pwShown = false; return; }
+      withPasswordConfirm(async () => {
+        const secretSnap = await getDoc(doc(db, "userSecrets", user.id));
+        if (secretSnap.exists() && secretSnap.data().password) { disp.textContent = secretSnap.data().password; pwShown = true; }
+        else { pwMsg.style.color = "#9B2C2C"; pwMsg.textContent = t().noStoredPassword; }
+      });
+    });
+    const changeBody = wrap.querySelector("#uPwChangeBody");
+    wrap.querySelector("#uPwChangeToggle").addEventListener("click", async () => {
+      const open = changeBody.style.display !== "none";
+      changeBody.style.display = open ? "none" : "flex";
+      if (!open) {
+        const secretSnap = await getDoc(doc(db, "userSecrets", user.id));
+        wrap.querySelector("#uKnownCurPass").style.display = secretSnap.exists() ? "none" : "block";
+      }
+    });
+    wrap.querySelector("#uPwSaveBtn").addEventListener("click", () => {
+      const pwMsg = wrap.querySelector("#uPwMsg");
+      const newPass = wrap.querySelector("#uNewPass").value;
+      if (newPass.length < 6) { pwMsg.style.color = "#9B2C2C"; pwMsg.textContent = t().userCreateError; return; }
+      withPasswordConfirm(async () => {
+        const secretSnap = await getDoc(doc(db, "userSecrets", user.id));
+        const curPass = secretSnap.exists() ? secretSnap.data().password : wrap.querySelector("#uKnownCurPass").value;
+        if (!curPass) { pwMsg.style.color = "#9B2C2C"; pwMsg.textContent = t().noStoredPassword; return; }
+        const idxSnap = await getDoc(doc(db, "usernameIndex", user.username));
+        const authEmail = idxSnap.exists() ? idxSnap.data().email : (user.email || `${user.username}@${USERNAME_DOMAIN}`);
+        const secName = "secondary-" + Date.now();
+        const secApp = initializeApp(firebaseConfig, secName);
+        const secAuth = getAuth(secApp);
+        try {
+          await signInWithEmailAndPassword(secAuth, authEmail, curPass);
+          await updatePassword(secAuth.currentUser, newPass);
+          await signOut(secAuth);
+          await setDoc(doc(db, "userSecrets", user.id), { password: newPass, updatedAt: serverTimestamp() });
+          pwMsg.style.color = "#1B4332"; pwMsg.textContent = t().passwordUpdated;
+          changeBody.style.display = "none";
+        } catch (err) {
+          pwMsg.style.color = "#9B2C2C"; pwMsg.textContent = t().passwordError;
+        } finally {
+          await deleteApp(secApp);
+        }
+      });
     });
     wrap.querySelector("#saveBtn").addEventListener("click", async () => {
       const name = wrap.querySelector("#uName").value.trim();
@@ -3265,7 +3363,7 @@ onAuthStateChanged(auth, async (u) => {
 setInterval(() => {
   const bar = document.getElementById("dateBar");
   if (bar) bar.innerHTML = dateBarHtml();
-}, 30000);
+}, 1000);
 </script>
 </body>
 </html>
