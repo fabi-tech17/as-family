@@ -95,7 +95,7 @@ const STR = {
     passwordError: "Couldn't change password. Check your current password.",
     dateDisplay: "Date Bar Display",
     showWeekday: "Weekday", showWeek: "Week Number", showGregorian: "Gregorian Date",
-    showBangla: "Bangla Date", showHijri: "Hijri Date", showTime: "Time", timeFormatLabel: "Time Format",
+    showBangla: "Bangla Date", showHijri: "Hijri Date", showTime: "Time", timeFormatLabel: "Time Format", forMonthLabel: "For Month",
     format12h: "12 Hour", format24h: "24 Hour",
     userManagement: "User Management", addUser: "Add User", editUser: "Edit User",
     name: "Name", isAdminUser: "Make this user an Admin", active: "Active", inactive: "Inactive",
@@ -181,7 +181,7 @@ const STR = {
     passwordError: "পাসওয়ার্ড পরিবর্তন করা যায়নি। বর্তমান পাসওয়ার্ড চেক করো।",
     dateDisplay: "ডেট বার ডিসপ্লে",
     showWeekday: "সপ্তাহের দিন", showWeek: "সপ্তাহ নম্বর", showGregorian: "ইংরেজি তারিখ",
-    showBangla: "বাংলা তারিখ", showHijri: "হিজরি তারিখ", showTime: "সময়", timeFormatLabel: "সময়ের ফরম্যাট",
+    showBangla: "বাংলা তারিখ", showHijri: "হিজরি তারিখ", showTime: "সময়", timeFormatLabel: "সময়ের ফরম্যাট", forMonthLabel: "কোন মাসের জন্য",
     format12h: "১২ ঘণ্টা", format24h: "২৪ ঘণ্টা",
     userManagement: "ইউজার ম্যানেজমেন্ট", addUser: "ইউজার যোগ করুন", editUser: "ইউজার এডিট করুন",
     name: "নাম", isAdminUser: "এই ইউজারকে Admin বানাও", active: "সক্রিয়", inactive: "নিষ্ক্রিয়",
@@ -779,12 +779,13 @@ function placeName(placeId) { return eventPlaces.find(p => p.id === placeId)?.na
 
 function computeDashboardStats() {
   const todayStr = todayISO();
-  const pending = events.filter(e => e.status !== "cancelled" && eventBalance(e) > 0);
+  const pending = events.filter(e => canView(e.subUnitId) && e.status !== "cancelled" && eventBalance(e) > 0);
   const upcoming = pending.filter(e => e.eventDate >= todayStr).sort((a, b) => (a.eventDate > b.eventDate ? 1 : -1))[0];
   const subUnitById = Object.fromEntries(subUnits.map(s => [s.id, s]));
   let shopDue = 0, houseDue = 0;
   tenants.forEach(tn => {
     if (tn.active === false) return;
+    if (!canView(tn.subUnitId)) return;
     if (!propertyIds.some(p => p.id === tn.propertyId)) return;
     if (dueMonthsFor(tn).length === 0) return;
     const name = (subUnitById[tn.subUnitId]?.name || "").toLowerCase();
@@ -798,6 +799,7 @@ function dueTenantsFor(category) {
   const subUnitById = Object.fromEntries(subUnits.map(s => [s.id, s]));
   return tenants.filter(tn => {
     if (tn.active === false) return false;
+    if (!canView(tn.subUnitId)) return false;
     if (!propertyIds.some(p => p.id === tn.propertyId)) return false;
     if (dueMonthsFor(tn).length === 0) return false;
     const name = (subUnitById[tn.subUnitId]?.name || "").toLowerCase();
@@ -884,9 +886,10 @@ function paintDashboardCard() {
   if (dashView === "events") {
     const tomorrowStr = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
     const todayStr = todayISO();
-    const todayEvents = sortedEvents(events.filter(e => e.status !== "cancelled" && e.eventDate === todayStr));
-    const tomorrowEvents = sortedEvents(events.filter(e => e.status !== "cancelled" && e.eventDate === tomorrowStr));
-    const restEvents = sortedEvents(events.filter(e => e.status !== "cancelled" && eventBalance(e) > 0 && e.eventDate !== todayStr && e.eventDate !== tomorrowStr));
+    const visibleEvents = events.filter(e => canView(e.subUnitId));
+    const todayEvents = sortedEvents(visibleEvents.filter(e => e.status !== "cancelled" && e.eventDate === todayStr));
+    const tomorrowEvents = sortedEvents(visibleEvents.filter(e => e.status !== "cancelled" && e.eventDate === tomorrowStr));
+    const restEvents = sortedEvents(visibleEvents.filter(e => e.status !== "cancelled" && eventBalance(e) > 0 && e.eventDate !== todayStr && e.eventDate !== tomorrowStr));
     listBox.innerHTML = `
       ${todayEvents.length ? `
         <h3 class="text-sm font-semibold mb-2" style="color:#1B4332">${t().today}</h3>
@@ -2358,6 +2361,10 @@ function openEventExpenseModal(ev) {
         <span class="font-medium" style="color:#6B6659">${t().details}</span>
         <input id="expDetails" class="inp" />
       </label>
+      <label class="flex flex-col gap-1 text-sm">
+        <span class="font-medium" style="color:#6B6659">${t().dateLabel}</span>
+        <input id="expDate" type="date" class="inp" value="${todayISO()}" />
+      </label>
       <div class="flex justify-end gap-2">
         <button id="cancelBtn" class="btn btn-outline">${t().cancel}</button>
         <button id="saveBtn" class="btn btn-primary">${t().save}</button>
@@ -2369,7 +2376,7 @@ function openEventExpenseModal(ev) {
       if (!amount) return;
       await addDoc(collection(db, "eventExpenses"), {
         eventId: ev.id, categoryId: wrap.querySelector("#expCat").value,
-        amount, details: wrap.querySelector("#expDetails").value.trim(), date: todayISO(), createdAt: serverTimestamp(),
+        amount, details: wrap.querySelector("#expDetails").value.trim(), date: wrap.querySelector("#expDate").value || todayISO(), createdAt: serverTimestamp(),
       });
       wrap.remove();
     });
@@ -2755,6 +2762,10 @@ function paintUnitExpensePanel(body, unitId) {
 }
 function openUnitExpEntryModal(unitId, existing) {
   const cats = unitExpenseCategories.filter(c => c.unitId === unitId);
+  const prev = ymAddMonths({ month: new Date().getMonth() + 1, year: new Date().getFullYear() }, -1);
+  const defaultMonthVal = existing?.month && existing?.year
+    ? `${existing.year}-${String(existing.month).padStart(2, "0")}`
+    : `${prev.year}-${String(prev.month).padStart(2, "0")}`;
   openModal(existing ? t().edit : t().addUnitExpenseEntry, `
     <div class="flex flex-col gap-4">
       <label class="flex flex-col gap-1 text-sm">
@@ -2762,16 +2773,23 @@ function openUnitExpEntryModal(unitId, existing) {
         <select id="ueCat" class="inp">${cats.map(c => `<option value="${c.id}" ${existing?.categoryId === c.id ? "selected" : ""}>${esc(c.name)}</option>`).join("") || `<option value="">—</option>`}</select>
       </label>
       <label class="flex flex-col gap-1 text-sm"><span class="font-medium" style="color:#6B6659">${t().amountLabel}</span><input id="ueAmount" type="number" class="inp" value="${existing?.amount || ""}" /></label>
+      <label id="ueMonthWrap" class="flex flex-col gap-1 text-sm" style="display:none"><span class="font-medium" style="color:#6B6659">${t().forMonthLabel}</span><input id="ueMonth" type="month" class="inp" value="${defaultMonthVal}" /></label>
       <label class="flex flex-col gap-1 text-sm"><span class="font-medium" style="color:#6B6659">${t().dateLabel}</span><input id="ueDate" type="date" class="inp" value="${existing?.date || todayISO()}" /></label>
       <label class="flex flex-col gap-1 text-sm"><span class="font-medium" style="color:#6B6659">${t().details}</span><input id="ueDetails" class="inp" value="${esc(existing?.details || "")}" /></label>
       <div class="flex justify-end gap-2"><button id="cancelBtn" class="btn btn-outline">${t().cancel}</button><button id="saveBtn" class="btn btn-primary">${t().save}</button></div>
     </div>`, (wrap) => {
     wrap.querySelector("#cancelBtn").addEventListener("click", () => wrap.remove());
+    const isMonthlyCat = () => unitExpenseCategories.find(c => c.id === wrap.querySelector("#ueCat").value)?.frequency === "monthly";
+    const syncMonthVisibility = () => { wrap.querySelector("#ueMonthWrap").style.display = isMonthlyCat() ? "flex" : "none"; };
+    wrap.querySelector("#ueCat").addEventListener("change", syncMonthVisibility);
+    syncMonthVisibility();
     wrap.querySelector("#saveBtn").addEventListener("click", () => {
       const amount = Number(wrap.querySelector("#ueAmount").value) || 0;
       if (!amount) return;
       const dateVal = wrap.querySelector("#ueDate").value || todayISO();
-      const [dy, dm] = dateVal.split("-").map(Number);
+      let [dy, dm] = dateVal.split("-").map(Number);
+      const monthVal = wrap.querySelector("#ueMonth").value;
+      if (isMonthlyCat() && monthVal) { [dy, dm] = monthVal.split("-").map(Number); }
       const data = { categoryId: wrap.querySelector("#ueCat").value, amount, date: dateVal, month: dm, year: dy, details: wrap.querySelector("#ueDetails").value.trim() };
       wrap.remove();
       if (existing) {
